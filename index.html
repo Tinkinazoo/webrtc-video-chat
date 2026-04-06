@@ -62,17 +62,24 @@
         
         const configuration = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' },
-                // TURN серверы от Twilio (бесплатно до 1 млн запросов)
                 {
-                    urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-                    username: 'any_username_will_work',
-                    credential: 'any_credential_will_work'
-                }
+                    urls: 'turn:global.relay.metered.ca:80',
+                    username: '5b84f8ccda0464af35524214',
+                    credential: '+xCB1rJDEbDn1D90'
+                },
+                {
+                    urls: 'turn:global.relay.metered.ca:443',
+                    username: '5b84f8ccda0464af35524214',
+                    credential: '+xCB1rJDEbDn1D90'
+                },
+                {
+                    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+                    username: '5b84f8ccda0464af35524214',
+                    credential: '+xCB1rJDEbDn1D90'
+                },
+                // STUN сервера как резерв
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
             ],
             iceCandidatePoolSize: 10
         };
