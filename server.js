@@ -1,30 +1,23 @@
-const https = require('https');
-const fs = require('fs');
 const express = require('express');
+const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
 // Раздача статических файлов
 app.use(express.static(__dirname));
 
-// Пути к сертификатам (созданным через mkcert)
-const options = {
-    key: fs.readFileSync('192.168.1.249-key.pem'),
-    cert: fs.readFileSync('192.168.1.249.pem')
-};
-
-const server = https.createServer(options, app);
-const io = socketIo(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
-
-// Все неизвестные маршруты отдаем index.html (для SPA)
+// Все неизвестные маршруты отдаем index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'simple.html'));
 });
 
 // Хранилище комнат
@@ -84,7 +77,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Сервер запущен на порту ${PORT}`);
-  console.log(`Откройте http://localhost:${PORT}`);
 });
