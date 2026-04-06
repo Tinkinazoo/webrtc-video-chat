@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebRTC Test - iOS Fixed</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #1a1a2e; color: white; margin: 0; }
+        .card { background: #16213e; padding: 20px; border-radius: 12px; margin: 10px 0; }
+        input, button { padding: 12px 16px; margin: 8px 0; font-size: 16px; border-radius: 8px; border: none; }
+        button { background: #e94560; color: white; font-weight: bold; cursor: pointer; width: 100%; }
+        button:active { opacity: 0.8; transform: scale(0.98); }
+        input { width: 100%; box-sizing: border-box; background: #0f3460; color: white; }
+        video { width: 100%; max-width: 400px; margin: 10px 0; background: #0f3460; border-radius: 12px; }
+        .log { background: #0f3460; padding: 10px; border-radius: 8px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 11px; }
+        .flex { display: flex; gap: 10px; }
+        .flex button { flex: 1; }
+        h1 { font-size: 20px; margin: 0 0 10px 0; }
+        .status { font-size: 12px; color: #a0aec0; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>📱 WebRTC Video Chat</h1>
+    <div class="status" id="status">Готов к работе</div>
+    
+    <div id="joinScreen" class="card">
+        <input type="text" id="roomId" placeholder="ID комнаты">
+        <div class="flex">
+            <button id="createBtn">✨ Создать комнату</button>
+            <button id="joinBtn">🔗 Подключиться</button>
+        </div>
+    </div>
+    
+    <div id="callScreen" style="display:none">
+        <div class="card">
+            <p>🏠 Комната: <strong id="roomDisplay"></strong></p>
+            <video id="localVideo" autoplay muted playsinline></video>
+            <video id="remoteVideo" autoplay playsinline></video>
+            <div class="flex">
+                <button id="toggleCamera">📷 Камера</button>
+                <button id="toggleMic">🎤 Микрофон</button>
+                <button id="leaveBtn">❌ Выйти</button>
+            </div>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // ============================================
+        // iOS-совместимая версия
+        // Ключевое: getUserMedia() вызывается ТОЛЬКО
+        // по прямому tap, без async оберток
+        // ============================================
+        
+        let localStream = null;
+        let peerConnection = null;
+        let socket = null;
+        let currentRoomId = null;
+        let currentUserId = Math.random().toString(36).substring(2, 10);
+        let isInCall = false;
+        
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ]
+        };
+        
+        function addLog(msg, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📱';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${prefix} ${msg}`;
+            entry.style.color = type === 'error' ? '#fc8181' : type === 'success' ? '#68d391' : '#a0aec0';
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(msg);
+            
+            const statusDiv = document.getElementById('status');
+            if (statusDiv) statusDiv.textContent = msg;
+        }
+        
+        // === ВАЖНО ДЛЯ iOS: getUserMedia вызывается напрямую по клику ===
+        async function initCameraAndStart(roomId, isCreator) {
+            addLog('Запрашиваю доступ к камере и микрофону...');
+            
+            try {
+                // Прямой вызов getUserMedia - iOS требует этого именно здесь
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user' }, 
+                    audio: true 
+                });
+                
+                const localVideo = document.getElementById('localVideo');
+                if (localVideo) {
+                    localVideo.srcObject = localStream;
+                }
+                
+                addLog('✅ Камера и микрофон готовы', 'success');
+                
+                // После получения доступа - начинаем звонок
+                await startCallAfterCamera(roomId, isCreator);
+                
+            } catch (err) {
+                addLog(`Ошибка доступа к камере: ${err.message}`, 'error');
+                console.error('Camera error:', err);
+            }
+        }
+        
+        async function startCallAfterCamera(roomId, isCreator) {
+            currentRoomId = roomId;
+            
+            socket = io();
+            
+            socket.on('connect', () => {
+                addLog('Подключен к серверу');
+                socket.emit('join-room', roomId, currentUserId);
+            });
+            
+            socket.on('user-connected', async (userId) => {
+                if (userId !== currentUserId && !peerConnection) {
+                    addLog(`👤 Пользователь ${userId.slice(-6)} подключился`);
+                    await createAndSendOffer(userId);
+                }
+            });
+            
+            socket.on('offer', async (data) => {
+                if (data.from !== currentUserId && !peerConnection) {
+                    addLog(`📞 Получен offer от ${data.from.slice(-6)}`);
+                    await handleOffer(data.from, data.offer);
+                }
+            });
+            
+            socket.on('answer', async (data) => {
+                if (data.from !== currentUserId && peerConnection) {
+                    addLog(`📞 Получен answer от ${data.from.slice(-6)}`);
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                }
+            });
+            
+            socket.on('ice-candidate', async (data) => {
+                if (data.from !== currentUserId && peerConnection && data.candidate) {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                }
+            });
+            
+            socket.on('user-disconnected', (userId) => {
+                addLog(`👋 Пользователь ${userId.slice(-6)} отключился`);
+                if (peerConnection) {
+                    peerConnection.close();
+                    peerConnection = null;
+                }
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo) remoteVideo.srcObject = null;
+            });
+            
+            // Переключаем UI
+            document.getElementById('joinScreen').style.display = 'none';
+            document.getElementById('callScreen').style.display = 'block';
+            document.getElementById('roomDisplay').textContent = roomId;
+            
+            isInCall = true;
+            addLog(`Подключен к комнате ${roomId}`, 'success');
+            
+            // Если создатель комнаты и есть другие пользователи - создаем offer
+            if (!isCreator) {
+                addLog('Ожидаем подключения других пользователей...');
+            }
+        }
+        
+        async function createPeerConnection(remoteUserId) {
+            const pc = new RTCPeerConnection(configuration);
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, localStream);
+                });
+            }
+            
+            pc.onicecandidate = (event) => {
+                if (event.candidate && socket && currentRoomId) {
+                    socket.emit('ice-candidate', { 
+                        roomId: currentRoomId, 
+                        candidate: event.candidate 
+                    });
+                }
+            };
+            
+            pc.ontrack = (event) => {
+                addLog('📺 Получен удаленный видеопоток', 'success');
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo) {
+                    remoteVideo.srcObject = event.streams[0];
+                }
+            };
+            
+            pc.onconnectionstatechange = () => {
+                addLog(`Состояние соединения: ${pc.connectionState}`);
+                if (pc.connectionState === 'connected') {
+                    addLog('🎥 Видеосоединение установлено!', 'success');
+                } else if (pc.connectionState === 'failed') {
+                    addLog('Соединение разорвано', 'error');
+                }
+            };
+            
+            return pc;
+        }
+        
+        async function createAndSendOffer(userId) {
+            try {
+                peerConnection = await createPeerConnection(userId);
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit('offer', { roomId: currentRoomId, offer: offer });
+                addLog(`Отправлен offer для ${userId.slice(-6)}`);
+            } catch (err) {
+                addLog(`Ошибка создания offer: ${err.message}`, 'error');
+            }
+        }
+        
+        async function handleOffer(userId, offer) {
+            try {
+                peerConnection = await createPeerConnection(userId);
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                socket.emit('answer', { roomId: currentRoomId, answer: answer });
+                addLog(`Отправлен answer для ${userId.slice(-6)}`);
+            } catch (err) {
+                addLog(`Ошибка обработки offer: ${err.message}`, 'error');
+            }
+        }
+        
+        function leaveCall() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            const remoteVideo = document.getElementById('remoteVideo');
+            if (remoteVideo) remoteVideo.srcObject = null;
+            const localVideo = document.getElementById('localVideo');
+            if (localVideo) localVideo.srcObject = null;
+            
+            document.getElementById('joinScreen').style.display = 'block';
+            document.getElementById('callScreen').style.display = 'none';
+            
+            isInCall = false;
+            addLog('Вы вышли из звонка');
+        }
+        
+        // === Обработчики кнопок ===
+        document.getElementById('createBtn').onclick = () => {
+            const roomId = Math.random().toString(36).substring(2, 10);
+            document.getElementById('roomId').value = roomId;
+            addLog(`Создаю комнату: ${roomId}`);
+            // iOS fix: вызываем initCameraAndStart ПРЯМО здесь
+            initCameraAndStart(roomId, true);
+        };
+        
+        document.getElementById('joinBtn').onclick = () => {
+            const roomId = document.getElementById('roomId').value.trim();
+            if (!roomId) {
+                addLog('Введите ID комнаты', 'error');
+                return;
+            }
+            addLog(`Подключаюсь к комнате: ${roomId}`);
+            // iOS fix: вызываем initCameraAndStart ПРЯМО здесь
+            initCameraAndStart(roomId, false);
+        };
+        
+        document.getElementById('toggleCamera').onclick = () => {
+            const track = localStream?.getVideoTracks()[0];
+            if (track) {
+                track.enabled = !track.enabled;
+                addLog(`Камера ${track.enabled ? 'включена' : 'выключена'}`);
+            }
+        };
+        
+        document.getElementById('toggleMic').onclick = () => {
+            const track = localStream?.getAudioTracks()[0];
+            if (track) {
+                track.enabled = !track.enabled;
+                addLog(`Микрофон ${track.enabled ? 'включен' : 'выключен'}`);
+            }
+        };
+        
+        document.getElementById('leaveBtn').onclick = () => {
+            leaveCall();
+        };
+        
+        addLog('🚀 Приложение готово. Нажмите "Создать комнату"');
+        addLog('📱 iOS: после нажатия появится запрос доступа к камере');
+    </script>
+</body>
+</html>
