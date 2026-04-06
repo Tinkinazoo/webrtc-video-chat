@@ -19,7 +19,7 @@
 
 ```bash
 # Клонирование репозитория
-git clone https://github.com/your-username/webrtc-video-chat.git
+git clone https://github.com/Tinkinazoo/webrtc-video-chat.git
 cd webrtc-video-chat
 
 # Установка зависимостей
