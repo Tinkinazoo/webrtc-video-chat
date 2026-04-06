@@ -1,7 +1,7 @@
 {
   "name": "webrtc-video-chat",
   "version": "1.0.0",
-  "description": "P2P Video Chat Widget with clean architecture",
+  "description": "P2P Video Chat Widget with WebRTC",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,7 +14,10 @@
   "devDependencies": {
     "nodemon": "^2.0.20"
   },
-  "keywords": ["webrtc", "video-chat", "p2p", "javascript", "architecture"],
+  "keywords": ["webrtc", "video-chat", "p2p", "websocket"],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
 }
