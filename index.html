@@ -77,9 +77,13 @@
                     username: '5b84f8ccda0464af35524214',
                     credential: '+xCB1rJDEbDn1D90'
                 },
-                // STUN сервера как резерв
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
+                // Добавьте эти строки, если они есть в инструкции
+                {
+                    urls: 'turn:global.relay.metered.ca:443?transport=tcp',
+                    username: '5b84f8ccda0464af35524214',
+                    credential: '+xCB1rJDEbDn1D90'
+                },
+                { urls: 'stun:stun.l.google.com:19302' }
             ],
             iceCandidatePoolSize: 10
         };
