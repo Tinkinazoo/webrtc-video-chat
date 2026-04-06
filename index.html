@@ -62,23 +62,18 @@
         
         const configuration = {
             iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                // TURN серверы от Twilio (бесплатно до 1 млн запросов)
                 {
-                    urls: 'turn:openrelay.metered.ca:80',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                },
-                {
-                    urls: 'turn:openrelay.metered.ca:443',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                },
-                {
-                    urls: 'turn:openrelay.metered.ca:80?transport=tcp',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
+                    urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                    username: 'any_username_will_work',
+                    credential: 'any_credential_will_work'
                 }
             ],
-            iceTransportPolicy: 'relay',  // КЛЮЧЕВО: только TURN, без STUN
             iceCandidatePoolSize: 10
         };
         
